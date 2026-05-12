@@ -1,17 +1,11 @@
 /// @description Soul UI — Step
-
-// Screen shake — applies offset to camera
+// obj_soul_ui Step — just decay, no camera movement
 if shake_intensity > shake_min {
     shake_intensity *= shake_decay;
-    
-    var _cam = view_camera[0];
-    var _ox  = random_range(-shake_intensity, shake_intensity);
-    var _oy  = random_range(-shake_intensity, shake_intensity);
-    
-    camera_set_view_pos(_cam,
-        camera_get_view_x(_cam) + _ox,
-        camera_get_view_y(_cam) + _oy
-    );
+    shake_x = random_range(-shake_intensity, shake_intensity);
+    shake_y = random_range(-shake_intensity, shake_intensity);
 } else {
     shake_intensity = 0;
+    shake_x = 0;
+    shake_y = 0;
 }

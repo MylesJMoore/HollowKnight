@@ -24,5 +24,7 @@ mask_empty   = make_color_rgb(60, 20, 20);    // dark red empty mask
 
 // Screen shake
 shake_intensity = 0;  // current shake amount in pixels
-shake_decay     = 0.85; // how fast shake dies — lower = faster stop
+shake_decay     = 0.75; // how fast shake dies — lower = faster stop
 shake_min       = 0.5;  // below this, snap to zero
+shake_x = 0;
+shake_y = 0;

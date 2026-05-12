@@ -73,6 +73,7 @@ hit_flash_max = 8;
 
 #region Camera
 // Camera setup
+shake_min = 0.5;
 var _cam = view_camera[0];
 camera_set_view_size(_cam, 480, 270); // HK's internal resolution feel
 var _cam_w = camera_get_view_width(_cam);

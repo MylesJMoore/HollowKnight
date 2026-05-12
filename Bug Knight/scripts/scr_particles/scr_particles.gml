@@ -34,6 +34,6 @@ function spawn_particles_directional(px, py, count, col, min_spd, max_spd, min_s
 
 function screenshake(intensity) {
     if instance_exists(obj_soul_ui) {
-        obj_soul_ui.shake_intensity = max(obj_soul_ui.shake_intensity, intensity);
+        obj_soul_ui.shake_intensity = max(obj_soul_ui.shake_intensity, intensity); // remove the * 4
     }
 }
