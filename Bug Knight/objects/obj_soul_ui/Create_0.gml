@@ -21,3 +21,8 @@ mask_size    = 14;  // size of each health square
 mask_gap     = 4;   // gap between masks
 mask_color   = make_color_rgb(220, 60, 60);   // red health
 mask_empty   = make_color_rgb(60, 20, 20);    // dark red empty mask
+
+// Screen shake
+shake_intensity = 0;  // current shake amount in pixels
+shake_decay     = 0.85; // how fast shake dies — lower = faster stop
+shake_min       = 0.5;  // below this, snap to zero

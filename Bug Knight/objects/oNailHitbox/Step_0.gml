@@ -59,6 +59,13 @@ with (oEnemy) {
 	        if _swing_dir == 1 _kn.hsp =  _recoil;
 	        if _swing_dir == 2 _kn.vsp =  _recoil;
 	    }
+		
+		// Impact particles at hit point
+		spawn_particles(other.x, other.y, 8,
+		    make_color_rgb(255, 200, 80),
+		    1, 4, 2, 5, "Particles"
+		);
+		screenshake(3);
     
 	    // Damage enemy last — after all other logic
 	    with (_enemy_id) {

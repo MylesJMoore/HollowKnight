@@ -89,25 +89,55 @@ if on_ground {
     fast_fall = false;
 }
 
-// Regular jump
+// Regular jump — particles shoot downward and sideways (knight pushes off ground)
 if jump_buffer > 0 && can_jump {
     vsp = jump_force;
     can_jump = false;
     jump_buffer = 0;
     jump_held = true;
+
+    // Downward burst — dust kicked off the ground going down and out
+    spawn_particles_directional(x, y,
+        jump_particle_count,
+        jump_particle_color,
+        jump_particle_min_spd, jump_particle_max_spd,
+        jump_particle_min_size, jump_particle_max_size,
+        "Particles",
+        90,  // 90 = downward in GML (y increases downward)
+        60   // 60 degree spread — wide fan of dust
+    );
 }
 
-// Wall jump
+// Wall jump — particles burst away from the wall
 if jump_buffer > 0 && _on_wall && !on_ground {
     vsp = wall_jump_vsp;
     jump_buffer = 0;
+
     if on_wall_left {
-        hsp = wall_jump_hsp;
-        facing = 1;
-    } else {
-        hsp = -wall_jump_hsp;
-        facing = -1;
-    }
+	    hsp = wall_jump_hsp;
+	    facing = 1;
+	    // Spawn at left edge — bbox_left is always the leftmost pixel
+	    spawn_particles_directional(bbox_left, y,
+	        wall_particle_count,
+	        wall_particle_color,
+	        1, 4, 1, 3,
+	        "Particles",
+	        315, // up-right diagonal away from left wall
+	        50
+	    );
+	} else {
+	    hsp = -wall_jump_hsp;
+	    facing = -1;
+	    // Spawn at right edge — bbox_right is always the rightmost pixel
+	    spawn_particles_directional(bbox_right, y,
+	        wall_particle_count,
+	        wall_particle_color,
+	        1, 4, 1, 3,
+	        "Particles",
+	        225, // up-left diagonal away from right wall
+	        50
+	    );
+	}
     wall_jump_lock = wall_jump_lock_max;
 }
 
@@ -198,6 +228,7 @@ if i_frames > 0 i_frames--;
 #endregion
 
 #region Collisions
+var vsp_prev = vsp;
 if hsp != 0 {
     if place_meeting(x + hsp, y, oPhysicalObject) {
         while !place_meeting(x + sign(hsp), y, oPhysicalObject) {
@@ -220,11 +251,38 @@ if vsp != 0 {
     }
 }
 
+// Landing dust — vsp_prev captured before collisions zeroed it
+if on_ground && !was_on_ground && vsp_prev > 2 {
+    spawn_particles_directional(x, y, 6,
+        jump_particle_color,
+        1, 3, 2, 5,
+        "Particles",
+        90, // downward — dust splashes out on landing
+        70  // wide spread
+    );
+}
+was_on_ground = on_ground;
+
 // Enemy body collision — push knight out but don't use physical object system
 if place_meeting(x, y, oEnemy) {
     // nudge knight out horizontally
     var _push = sign(x - oEnemy.x);
     x += _push * 2;
+}
+#endregion
+
+#region Walk Dust
+if on_ground && abs(hsp) > 0.5 {
+    walk_particle_timer++;
+    if walk_particle_timer >= walk_particle_rate {
+        walk_particle_timer = 0;
+        spawn_particles(x, y, 2,
+            make_color_rgb(80, 80, 80),
+            0.2, 0.8, 1, 2, "Particles"
+        );
+    }
+} else {
+    walk_particle_timer = 0;
 }
 #endregion
 
@@ -236,10 +294,6 @@ image_xscale = facing;
 if (health_current <= 0) {
 	sprite_index = spr_knight_dead;
 }
-#endregion
-
-#region Draw Facing
-image_xscale = facing;
 #endregion
 
 #region Camera

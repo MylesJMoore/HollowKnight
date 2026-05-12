@@ -22,6 +22,7 @@ can_jump       = false; // only true when on ground
 jump_held      = false;
 jump_buffer    = 0;
 jump_buffer_max = 6;
+was_on_ground = false;
 #endregion
 
 #region State
@@ -65,6 +66,11 @@ i_frames       = 0;   // invincibility frames after taking damage
 i_frames_max   = 60; // 1 second of i-frames
 #endregion
 
+#region Hit Flash
+hit_flash    = 0;    // frames of white overlay
+hit_flash_max = 8;
+#endregion
+
 #region Camera
 // Camera setup
 var _cam = view_camera[0];
@@ -77,4 +83,22 @@ camera_set_view_pos(_cam,
 );
 
 display_set_gui_size(1280, 720);
+#endregion
+
+#region Particles
+// Walk particles
+walk_particle_timer = 0;
+walk_particle_rate  = 8;
+
+// Jump particles
+jump_particle_count  = 8;
+jump_particle_min_spd = 1;
+jump_particle_max_spd = 4;
+jump_particle_min_size = 1;
+jump_particle_max_size = 4;
+jump_particle_color  = make_color_rgb(80, 80, 80);
+
+// Wall jump particles
+wall_particle_count  = 6;
+wall_particle_color  = make_color_rgb(100, 100, 100);
 #endregion
