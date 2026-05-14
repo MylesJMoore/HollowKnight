@@ -14,7 +14,7 @@ color_vessel_bg     = make_color_rgb(20, 20, 40);    // dark vessel background
 color_vessel_border = make_color_rgb(100, 100, 180);  // blue-grey border
 color_soul_fill     = make_color_rgb(100, 180, 255);  // light blue soul fill
 color_soul_full     = make_color_rgb(180, 240, 255);  // brighter when full
-color_text          = c_white;
+color_text          = c_black;
 
 // Health mask settings
 mask_size    = 14;  // size of each health square
@@ -28,3 +28,8 @@ shake_decay     = 0.75; // how fast shake dies — lower = faster stop
 shake_min       = 0.5;  // below this, snap to zero
 shake_x = 0;
 shake_y = 0;
+
+// Soul Cast Feedback
+soul_flash    = 0;
+soul_flash_max = 12;
+soul_flash_color = c_white;

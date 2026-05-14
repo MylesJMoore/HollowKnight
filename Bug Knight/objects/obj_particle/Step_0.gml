@@ -6,8 +6,8 @@ vsp *= friction;
 x += hsp;
 y += vsp;
 
-// Gravity — optional, makes dust fall naturally
-vsp += 0.1;
+// Gravity — reduced so walk dust floats up slightly before settling
+//vsp += 0.04; // was 0.1 — much gentler, particles rise before falling
 
 // Shrink and fade
 size  = max(size - size_shrink, 0);

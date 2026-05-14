@@ -29,3 +29,16 @@ if nail_active {
     
     draw_set_alpha(1);
 }
+
+// Cast glow — purple pulse while casting
+if casting {
+    var _pulse = (sin(current_time * 0.02) + 1) / 2;
+    draw_set_color(make_color_rgb(200, 150, 255));
+    draw_set_alpha(_pulse * 0.5);
+    draw_rectangle(
+        bbox_left - 4, bbox_top - 4,
+        bbox_right + 4, bbox_bottom + 4,
+        false
+    );
+    draw_set_alpha(1);
+}

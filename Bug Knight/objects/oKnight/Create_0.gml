@@ -59,6 +59,15 @@ soul_current = 0;
 soul_per_hit = 11; // HK gives 11 soul per nail hit (3 hits = 1 spell)
 #endregion
 
+#region Spells
+soul_cost_vs    = 11;       // soul cost for Vengeful Spirit
+spell_cooldown  = 0;        // frames until next spell allowed
+spell_cd_max    = 30;       // ~0.5s cooldown between spells
+casting         = false;    // true during cast pause
+cast_timer      = 0;        // counts down cast pause
+cast_dur_max    = 18;       // frames of cast pause — knight frozen
+#endregion
+
 #region Health
 health_max     = 5;   // 5 masks like early HK
 health_current = 5;
@@ -103,3 +112,4 @@ jump_particle_color  = make_color_rgb(80, 80, 80);
 wall_particle_count  = 6;
 wall_particle_color  = make_color_rgb(100, 100, 100);
 #endregion
+

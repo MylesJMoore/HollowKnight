@@ -84,13 +84,27 @@ draw_set_valign(fa_top);
 draw_text(_vx, _vy + vessel_h + 4, string(_kn.soul_current) + "/" + string(_kn.soul_max));
 #endregion
 
+#region Soul Flash
+if soul_flash > 0 {
+    draw_set_color(soul_flash_color);
+    draw_set_alpha(soul_flash / soul_flash_max * 0.5);
+    draw_rectangle(_vx, _vy, _vx + vessel_w, _vy + vessel_h, false);
+    draw_set_alpha(1);
+    soul_flash--;
+    if soul_flash <= 0 soul_flash_color = c_white;
+}
+#endregion
+
 #region Soul Full Indicator
-// Pulse effect when soul is full — draws a glow around the vessel
 if _kn.soul_current >= _kn.soul_max {
-    var _pulse = (sin(current_time * 0.005) + 1) / 2; // 0 to 1 oscillation
-    draw_set_color(color_soul_full);
-    draw_set_alpha(_pulse * 0.4);
-    draw_rectangle(_vx - 2, _vy - 2, _vx + vessel_w + 2, _vy + vessel_h + 2, true);
+    // Pulsing purple glow outline
+    var _pulse = (sin(current_time * 0.008) + 1) / 2;
+    draw_set_color(make_color_rgb(200, 150, 255));
+    draw_set_alpha(_pulse * 0.6);
+    draw_rectangle(_vx - 2, _vy - 2, _vx + vessel_w + 2, _vy + vessel_h + 2, false);
+    draw_set_color(make_color_rgb(200, 150, 255));
+    draw_set_alpha(_pulse * 0.3);
+    draw_rectangle(_vx - 4, _vy - 4, _vx + vessel_w + 4, _vy + vessel_h + 4, false);
     draw_set_alpha(1);
 }
 #endregion

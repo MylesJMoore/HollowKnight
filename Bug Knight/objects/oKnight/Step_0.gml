@@ -5,26 +5,23 @@ var _gp = 0; // gamepad slot
 
 // Gamepad connected — use it
 if gamepad_is_connected(_gp) {
-    key_left  = gamepad_button_check(_gp, gp_padl)
-                || gamepad_axis_value(_gp, gp_axislh) < -0.3;
-    key_right = gamepad_button_check(_gp, gp_padr)
-                || gamepad_axis_value(_gp, gp_axislh) > 0.3;
-    key_up    = gamepad_button_check(_gp, gp_padu)
-                || gamepad_axis_value(_gp, gp_axislv) < -0.3;
-    key_down  = gamepad_button_check(_gp, gp_padd)
-                || gamepad_axis_value(_gp, gp_axislv) > 0.3;
-    key_jump  = gamepad_button_check_pressed(_gp, gp_face1); // A
-    key_jump_held = gamepad_button_check(_gp, gp_face1);
-    key_nail  = gamepad_button_check_pressed(_gp, gp_face3); // X
+    key_left      = !casting && (gamepad_button_check(_gp, gp_padl) || gamepad_axis_value(_gp, gp_axislh) < -0.3);
+    key_right     = !casting && (gamepad_button_check(_gp, gp_padr) || gamepad_axis_value(_gp, gp_axislh) > 0.3);
+    key_up        = gamepad_button_check(_gp, gp_padu) || gamepad_axis_value(_gp, gp_axislv) < -0.3;
+    key_down      = gamepad_button_check(_gp, gp_padd) || gamepad_axis_value(_gp, gp_axislv) > 0.3;
+    key_jump      = !casting && gamepad_button_check_pressed(_gp, gp_face1);
+    key_jump_held = !casting && gamepad_button_check(_gp, gp_face1);
+    key_nail      = !casting && gamepad_button_check_pressed(_gp, gp_face3);
+    key_spell     = gamepad_button_check_pressed(_gp, gp_shoulderlb);
 } else {
-    // Keyboard fallback
-    key_left      = keyboard_check(vk_left)  || keyboard_check(ord("A"));
-    key_right     = keyboard_check(vk_right) || keyboard_check(ord("D"));
+    key_left      = !casting && (keyboard_check(vk_left)  || keyboard_check(ord("A")));
+    key_right     = !casting && (keyboard_check(vk_right) || keyboard_check(ord("D")));
     key_up        = keyboard_check(vk_up)    || keyboard_check(ord("W"));
     key_down      = keyboard_check(vk_down)  || keyboard_check(ord("S"));
-    key_jump      = keyboard_check_pressed(vk_space);
-    key_jump_held = keyboard_check(vk_space);
-    key_nail      = keyboard_check_pressed(ord("Z"));
+    key_jump      = !casting && keyboard_check_pressed(vk_space);
+    key_jump_held = !casting && keyboard_check(vk_space);
+    key_nail      = !casting && keyboard_check_pressed(ord("Z"));
+    key_spell     = keyboard_check_pressed(ord("Q"));
 }
 #endregion
 
@@ -176,6 +173,49 @@ if nail_duration > 0 nail_duration--;
 if nail_duration <= 0 nail_active = false;
 #endregion
 
+#region Spell Cooldown
+if spell_cooldown > 0 spell_cooldown--;
+
+// Cast timer — knight frozen during this
+if casting {
+    cast_timer--;
+    if cast_timer <= 0 {
+        casting = false;
+        // Spawn projectile when cast ends
+        var _proj = instance_create_layer(x, y - sprite_height / 2, "Instances", oVengefulSpirit);
+        _proj.owner   = id;
+        _proj.hsp     = facing == 1 ? 8 : -8; // travel direction
+        _proj.facing  = facing;
+    }
+}
+#endregion
+
+#region Spell Input
+if key_spell && !casting && spell_cooldown <= 0 {
+    if soul_current >= soul_cost_vs {
+        soul_current -= soul_cost_vs;
+        casting       = true;
+        cast_timer    = cast_dur_max;
+        spell_cooldown = spell_cd_max;
+        
+        spawn_particles_directional(x, y - sprite_height / 2, 6,
+            make_color_rgb(200,150, 255),
+            1, 3, 2, 4, "Particles", 270, 40
+        );
+        
+        if instance_exists(obj_soul_ui) {
+            obj_soul_ui.soul_flash = obj_soul_ui.soul_flash_max;
+        }
+    } else {
+        // Not enough soul — flash vessel red as feedback
+        if instance_exists(obj_soul_ui) {
+            obj_soul_ui.soul_flash_color = c_red;
+            obj_soul_ui.soul_flash = obj_soul_ui.soul_flash_max;
+        }
+    }
+}
+#endregion
+
 #region Nail Input
 if key_nail && nail_cooldown <= 0 {
     nail_active   = true;
@@ -276,10 +316,13 @@ if on_ground && abs(hsp) > 0.5 {
     walk_particle_timer++;
     if walk_particle_timer >= walk_particle_rate {
         walk_particle_timer = 0;
-        spawn_particles(x, y, 2,
-            make_color_rgb(80, 80, 80),
-            0.2, 0.8, 1, 2, "Particles"
-        );
+        spawn_particles_directional(x, y, 2,
+		    make_color_rgb(80, 80, 80),
+		    0.5, 1.5, 1, 2,
+		    "Particles",
+		    150, // slightly left of straight up — rises and drifts
+		    25   // narrow spread
+		);
     }
 } else {
     walk_particle_timer = 0;

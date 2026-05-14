@@ -45,9 +45,24 @@ with (oEnemy) {
 	    // Store ref before potentially destroying
 	    var _enemy_id = id;
     
-	    // Give soul
-	    var _kn = _owner;
-	    _kn.soul_current = min(_kn.soul_current + _kn.soul_per_hit, _kn.soul_max);
+	    // Give soul — check if this hit fills the meter
+		var _kn = _owner;
+		var _was_full = _kn.soul_current >= _kn.soul_max;
+		_kn.soul_current = min(_kn.soul_current + _kn.soul_per_hit, _kn.soul_max);
+
+		// Burst when soul becomes full for the first time
+		if !_was_full && _kn.soul_current >= _kn.soul_max {
+		    spawn_particles_directional(
+		        _kn.x, _kn.y - _kn.sprite_height / 2, 10,
+		        make_color_rgb(200, 150, 255),
+		        1, 4, 2, 5,
+		        "Particles", 270, 60
+		    );
+		    if instance_exists(obj_soul_ui) {
+		        obj_soul_ui.soul_flash       = obj_soul_ui.soul_flash_max;
+		        obj_soul_ui.soul_flash_color = make_color_rgb(200, 150, 255);
+		    }
+		}
     
 	    // Bounce / recoil
 	    if _swing_dir == 3 {
