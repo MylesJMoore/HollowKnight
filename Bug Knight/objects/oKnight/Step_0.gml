@@ -303,11 +303,18 @@ if on_ground && !was_on_ground && vsp_prev > 2 {
 }
 was_on_ground = on_ground;
 
-// Enemy body collision — push knight out but don't use physical object system
+// Enemy body collision — push knight out, wall-aware
 if place_meeting(x, y, oEnemy) {
-    // nudge knight out horizontally
     var _push = sign(x - oEnemy.x);
-    x += _push * 2;
+    
+    // Only nudge if there's no wall in that direction
+    if !place_meeting(x + (_push * 2), y, oPhysicalObject) {
+        x += _push * 2;
+    } else if !place_meeting(x - (_push * 2), y, oPhysicalObject) {
+        // Try pushing the other way if blocked
+        x -= _push * 2;
+    }
+    // If both directions blocked — knight is cornered, don't move
 }
 #endregion
 

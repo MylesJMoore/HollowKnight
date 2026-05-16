@@ -88,3 +88,23 @@ with (oEnemy) {
 	    }
 	}
 }
+
+// Check breakables
+with (oBreakable) {
+    var _hx1 = other.bbox_left;
+    var _hx2 = other.bbox_right;
+    var _hy1 = other.bbox_top;
+    var _hy2 = other.bbox_bottom;
+
+    var _overlapping = (_hx1 < bbox_right) && (_hx2 > bbox_left)
+                    && (_hy1 < bbox_bottom) && (_hy2 > bbox_top);
+
+    if _overlapping {
+        spawn_particles(x, y, 6,
+            make_color_rgb(255, 200, 80),
+            1, 3, 2, 4, "Particles"
+        );
+        screenshake(2);
+        event_user(0);
+    }
+}

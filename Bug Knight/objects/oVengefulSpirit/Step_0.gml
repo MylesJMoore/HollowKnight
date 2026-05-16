@@ -75,3 +75,25 @@ with (oEnemy) {
         exit;
     }
 }
+
+// Check breakables
+with (oBreakable) {
+    var _overlapping = (other.bbox_left < bbox_right) && (other.bbox_right > bbox_left)
+                    && (other.bbox_top < bbox_bottom) && (other.bbox_bottom > bbox_top);
+
+    if _overlapping {
+        spawn_particles(other.x, other.y, 8,
+            make_color_rgb(200, 150, 255),
+            1, 4, 2, 5, "Particles"
+        );
+        screenshake(2);
+        event_user(0);
+
+        // Destroy spirit
+        with (other) {
+            spawn_particles(x, y, 6, color, 1, 3, 2, 4, "Particles");
+            instance_destroy();
+        }
+        exit;
+    }
+}
