@@ -341,8 +341,39 @@ image_xscale = facing;
 #endregion
 
 #region Death
-if (health_current <= 0) {
-	sprite_index = spr_knight_dead;
+if dead {
+    death_timer--;
+    if death_timer <= 0 {
+        // Respawn
+        dead           = false;
+        health_current = health_max;
+        soul_current   = 0;
+        x              = spawn_x;
+        y              = spawn_y;
+        hsp            = 0;
+        vsp            = 0;
+        i_frames       = i_frames_max;
+        sprite_index   = spr_knight;
+        transition_to(room_current); // fade out then fade back in
+    }
+    exit; // skip all movement while dead
+}
+
+if health_current <= 0 && !dead {
+    dead        = true;
+    death_timer = death_dur;
+    hsp         = 0;
+    vsp         = 0;
+
+    // Death burst
+    spawn_particles(x, y, 20,
+        make_color_rgb(255, 255, 255),
+        2, 8, 2, 6, "Particles"
+    );
+    screenshake(8);
+
+    // Trigger fade out
+    transition_to(room_current);
 }
 #endregion
 

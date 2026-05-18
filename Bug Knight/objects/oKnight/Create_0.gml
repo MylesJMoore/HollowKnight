@@ -113,3 +113,12 @@ wall_particle_count  = 6;
 wall_particle_color  = make_color_rgb(100, 100, 100);
 #endregion
 
+#region Death & Respawn
+// Death + Respawn
+room_current = room;
+dead           = false;
+death_timer    = 0;
+death_dur      = 90;   // frames before respawn — 1.5 seconds
+spawn_x        = x;    // save start position
+spawn_y        = y;
+#endregion
