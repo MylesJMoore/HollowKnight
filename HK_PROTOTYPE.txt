@@ -1,0 +1,1498 @@
+================================================================================
+  HK_PROTOTYPE  --  Bug Knight Complete Reference
+================================================================================
+
+  Project:             Bug Knight
+  Engine:              GameMaker Studio 2 (IDE 2023.11.1.129)
+  Author:              LoafCentral
+  Purpose:             Hollow Knight-inspired 2D platformer prototype
+  Internal Resolution: 480x270 (pixel-art feel, displayed at 1280x720 GUI)
+
+================================================================================
+  TABLE OF CONTENTS
+================================================================================
+
+  1.  What This Project Is
+  2.  Project Structure -- Files and Folders
+  3.  Object List at a Glance
+  4.  Script Functions Reference
+  5.  Object Deep Dives -- Every Event Explained
+        obj_init
+        obj_transition
+        obj_parallax
+        obj_menu
+        obj_soul_ui
+        obj_particle
+        oKnight
+        oPhysicalObject
+        oEnemy (parent)
+        oCrawler
+        oLeaper
+        oNailHitbox
+        oVengefulSpirit
+        oBreakable
+        oSoulOrb
+        oHealthOrb
+  6.  Phase Breakdown -- What Was Built When
+  7.  Tuning Reference -- Every Configurable Variable
+  8.  How Systems Talk to Each Other
+  9.  Rooms
+  10. Porting to a New Project
+
+
+================================================================================
+  1.  WHAT THIS PROJECT IS
+================================================================================
+
+Bug Knight is a prototype modeled closely on the game Hollow Knight. The goal
+was to recreate some of the base mechanics from Hollow Knight into a extendable prototype project. 
+It covers:
+
+  - Movement that matches Hollow Knight's deliberate, heavy-but-precise feel
+    (instant ground speed, committed air control, wall jumping)
+
+  - Combat with a directional nail (sword) and one spell (Vengeful Spirit
+    fireball)
+
+  - Soul system -- a resource meter that fills as you hit enemies and drains
+    when you cast spells
+
+  - Two enemy types with distinct AI patterns
+
+  - Particle effects, screen shake, hit flash -- the polish layer that makes
+    everything feel alive
+
+  - Breakable objects with configurable drop tables
+
+  - Collectibles (soul orbs, health orbs) with magnetic pick-up behavior
+
+  - A full menu system with Controls and Options screens
+
+  - Room transitions with fade-to-black
+
+  - Parallax scrolling background
+
+  - Death and respawn with room reload
+
+Everything is written in GML (GameMaker Language) without any built-in physics
+engine -- all movement, collision, and gravity are coded manually.
+
+
+================================================================================
+  2.  PROJECT STRUCTURE -- FILES AND FOLDERS
+================================================================================
+
+  Bug Knight/
+  |
+  |-- Bug Knight.yyp          Main project file. Lists all resources.
+  |
+  |-- objects/                All game objects (.yy definition + .gml events)
+  |   |-- obj_init/           Game-start initializer (persistent, runs once)
+  |   |-- obj_transition/     Fade-to-black overlay (persistent singleton)
+  |   |-- obj_parallax/       Procedural parallax background
+  |   |-- obj_menu/           Title screen / controls / options
+  |   |-- obj_soul_ui/        HUD: health masks + soul vessel + screen shake
+  |   |-- obj_particle/       Single reusable square particle
+  |   |-- oKnight/            Player character (all movement, combat, spells)
+  |   |-- oPhysicalObject/    Solid collision parent (tiles/walls inherit this)
+  |   |-- oEnemy/             Enemy parent class (health, hit flash, contact dmg)
+  |   |-- oCrawler/           Patrol enemy (walks back and forth)
+  |   |-- oLeaper/            Leaping enemy (jumps at player)
+  |   |-- oNailHitbox/        Invisible hitbox spawned per nail swing
+  |   |-- oVengefulSpirit/    Fireball projectile (Vengeful Spirit spell)
+  |   |-- oBreakable/         Destructible crate with configurable drops
+  |   |-- oSoulOrb/           Soul pickup (fills spell meter)
+  |   `-- oHealthOrb/         Health pickup (restores 1 mask)
+  |
+  |-- scripts/                Standalone utility functions
+  |   |-- scr_approach/       approach() -- move value toward target by amount
+  |   |-- scr_init/           init_breakable_types(), transition_to()
+  |   `-- scr_particles/      spawn_particles(), spawn_particles_directional(),
+  |                           screenshake()
+  |
+  |-- rooms/
+  |   |-- rm_menu/            Title screen room
+  |   `-- rm_test/            Gameplay test room (where you play)
+  |
+  |-- sprites/                All sprites (.png + .yy)
+  |   |-- spr_knight          Player sprite
+  |   |-- spr_crawler         Crawler enemy sprite
+  |   |-- spr_leaper          Leaper enemy sprite
+  |   |-- spr_soul_orb        Soul pickup sprite
+  |   |-- spr_health_orb      Health pickup sprite
+  |   |-- spr_nail_h          Nail hitbox sprite (horizontal)
+  |   `-- spr_nail_v          Nail hitbox sprite (vertical)
+  |
+  `-- fonts/
+      `-- fnt_dialogue        Font used for all text rendering
+
+
+  KEY GML FILE NAMING CONVENTION
+  --------------------------------
+  Inside each object folder, events are stored as separate .gml files:
+
+    Create_0.gml    Create event -- runs once when instance is created
+    Step_0.gml      Step event -- runs every frame (~60fps)
+    Draw_0.gml      Draw event -- draw to the game world / camera space
+    Draw_64.gml     Draw GUI event -- draw to screen space, ignores camera
+    Draw_72.gml     Post-Draw GUI event -- runs after Draw GUI
+    Other_10.gml    User Event 0 -- a custom event called with event_user(0)
+
+
+================================================================================
+  3.  OBJECT LIST AT A GLANCE
+================================================================================
+
+  Object              Type             Persistent   Purpose
+  ----------------    ---------------  ----------   ----------------------------
+  obj_init            Utility          Yes          Initializes global data once
+  obj_transition      Utility          Yes          Singleton fade overlay
+  obj_parallax        Visual           No           Scrolling parallax background
+  obj_menu            UI               No           Title screen, controls, opts
+  obj_soul_ui         HUD              No           Health masks, soul bar, shake
+  obj_particle        VFX              No           One reusable square particle
+  oKnight             Player           No           Full player controller
+  oPhysicalObject     Collision        --           Parent of all solid geometry
+  oEnemy              Enemy (parent)   No           Base: health, flash, contact
+  oCrawler            Enemy            No           Patrol AI, turns at walls
+  oLeaper             Enemy            No           Leap AI, jumps at player
+  oNailHitbox         Hitbox           No           Temp hitbox per nail swing
+  oVengefulSpirit     Projectile       No           Vengeful Spirit fireball
+  oBreakable          Prop             No           Destructible crate w/ drops
+  oSoulOrb            Pickup           No           Soul resource, magnetic
+  oHealthOrb          Pickup           No           Heals 1 mask, magnetic
+
+
+================================================================================
+  4.  SCRIPT FUNCTIONS REFERENCE
+================================================================================
+
+  Scripts in GML are .gml files containing standalone functions. They are
+  global -- any object can call them from anywhere.
+
+  --------------------------------------------------------------------------------
+  scr_approach.gml
+  --------------------------------------------------------------------------------
+
+  approach(val, target, amount)
+
+    Moves "val" toward "target" by "amount" without overshooting.
+
+    Examples:
+      approach(3, 10, 2)  -->  5
+      approach(10, 3, 4)  -->  6
+      approach(10, 3, 10) -->  3   (clamps, never goes past target)
+
+    Arguments:
+      val      real    Current value
+      target   real    Value to move toward
+      amount   real    Maximum step size per frame
+
+    Returns: The new value. Does NOT modify in place -- you must assign it:
+      hsp = approach(hsp, 0, 0.5);
+
+    When to use: Smooth acceleration and deceleration. Used in wall-jump
+    momentum bleed-off so the knight gradually regains steering control rather
+    than snapping instantly.
+
+  --------------------------------------------------------------------------------
+  scr_init.gml
+  --------------------------------------------------------------------------------
+
+  init_breakable_types()
+
+    Populates global.breakable_types -- a struct that maps string keys to drop
+    configurations. Called once by obj_init at game start.
+
+    The four built-in types are:
+
+      "crate_soul"    drops 2 soul orbs
+      "crate_health"  drops 1 health orb
+      "crate_mixed"   drops 2 soul orbs and 1 health orb
+      "crate_rich"    drops 4 soul orbs and 2 health orbs
+
+    To add a new crate type, add an entry to this function and reference the
+    key string in a room's instance Creation Code:
+
+      breakable_type = "crate_rich";
+
+  ................................................................................
+
+  transition_to(room_id)
+
+    Triggers a fade-out then switches to room_id, then fades back in.
+    Safe to call from anywhere.
+
+    Examples:
+      transition_to(rm_test);      // go to the test room
+      transition_to(room_current); // reload the current room (used on death)
+
+    How it works: Creates obj_transition if it doesn't exist, then sets
+    fading_out = true. The transition object handles the room switch once the
+    fade completes, then fades back in automatically.
+
+  --------------------------------------------------------------------------------
+  scr_particles.gml
+  --------------------------------------------------------------------------------
+
+  spawn_particles(px, py, count, col, min_spd, max_spd, min_size, max_size,
+                  layer_name)
+
+    Spawns "count" square particles exploding in all directions from a point.
+
+    Arguments:
+      px, py           real      World position to spawn at
+      count            int       Number of particles to create
+      col              color     Particle color -- use make_color_rgb(r, g, b)
+      min_spd/max_spd  real      Speed range in pixels per frame
+      min_size/max_size real     Starting size range in pixels
+      layer_name       string    Layer to create on, e.g. "Particles"
+
+    Example -- hit impact:
+      spawn_particles(x, y, 8, make_color_rgb(255, 200, 80), 1, 4, 2, 5,
+                      "Particles");
+
+  ................................................................................
+
+  spawn_particles_directional(px, py, count, col, min_spd, max_spd, min_size,
+                               max_size, layer_name, angle, spread)
+
+    Same as spawn_particles but fires in a cone instead of all directions.
+
+    Extra arguments:
+      angle    real    Center direction in degrees
+      spread   real    Half-angle of cone (e.g. 30 means +/-30 = 60 deg wide)
+
+    Angle reference (GML has Y increasing downward):
+      0   = right
+      90  = down
+      180 = left
+      270 = up
+
+    Example -- jump dust exploding downward:
+      spawn_particles_directional(x, y, 8, c_gray, 1, 4, 1, 4,
+                                  "Particles", 90, 60);
+
+  ................................................................................
+
+  screenshake(intensity)
+
+    Sets the screen shake magnitude on obj_soul_ui. Safe to call even if
+    obj_soul_ui doesn't exist -- it checks first.
+
+    Intensity guide:
+      screenshake(2)  lightest (breakable hit)
+      screenshake(3)  light (nail hits enemy)
+      screenshake(5)  medium (player takes damage)
+      screenshake(8)  heavy (player death)
+
+    Shake decays over time via shake_decay (0.75 default -- loses 25% per
+    frame, lasts about 10 frames).
+
+
+================================================================================
+  5.  OBJECT DEEP DIVES -- EVERY EVENT EXPLAINED
+================================================================================
+
+  --------------------------------------------------------------------------------
+  obj_init
+  --------------------------------------------------------------------------------
+
+  Purpose:
+    One-time game initializer. Place this in rm_menu (the first room). It
+    persists across room changes so it only ever runs once.
+
+  CREATE event:
+    instance_persistent = true;
+    init_breakable_types();
+
+    That's the entire object. It exists solely to call init_breakable_types()
+    before any room that uses breakable crates loads.
+
+  --------------------------------------------------------------------------------
+  obj_transition
+  --------------------------------------------------------------------------------
+
+  Purpose:
+    A full-screen black overlay that fades out to black, switches rooms, then
+    fades back in. It's a persistent singleton -- only one should ever exist.
+
+  CREATE event:
+    instance_persistent = true;
+    alpha       = 0       current overlay opacity (0 = invisible, 1 = black)
+    fade_speed  = 0.04    opacity change per frame
+    fading_out  = false   currently going to black?
+    fading_in   = false   currently clearing from black?
+    target_room = -1      room to switch to at the midpoint of the fade
+
+    If a second instance of obj_transition is created, it destroys itself
+    (singleton protection).
+
+  STEP event:
+    Phase 1 -- fading_out = true:
+      Increments alpha each frame. When alpha reaches 1, switches to
+      target_room, then sets fading_in = true.
+
+    Phase 2 -- fading_in = true:
+      Decrements alpha each frame. When alpha reaches 0, done.
+
+  DRAW GUI event:
+    Draws a black rectangle covering the entire screen when alpha > 0.
+
+  Usage from code:
+    Always use the transition_to() helper function, not obj_transition directly.
+
+  --------------------------------------------------------------------------------
+  obj_parallax
+  --------------------------------------------------------------------------------
+
+  Purpose:
+    Draws a layered background of colored rectangles that scroll at different
+    speeds as the camera moves, creating a sense of depth.
+
+  CREATE event:
+    Defines a "layers" array. Each entry is a struct describing one layer:
+
+      color    -- the color of the rectangles on this layer
+      alpha    -- opacity of the layer
+      speed    -- 0.0 means fixed, 1.0 means moves fully with camera
+      rects    -- how many rectangles to draw (0 = solid fill layer)
+      seed     -- random seed for consistent rectangle placement
+
+    depth = 10000 ensures it draws behind all gameplay objects.
+
+    Layer setup (from back to front):
+      Layer 0: solid dark background fill (rects = 0, no scrolling)
+      Layer 1: far distance, speed 0.15, 8 rectangles
+      Layer 2: mid distance, speed 0.30, 12 rectangles
+      Layer 3: near distance, speed 0.50, 10 rectangles
+
+  DRAW event:
+    Loops through every layer. For the solid layer it fills the camera
+    viewport. For parallax layers it calls random_set_seed before generating
+    rectangle positions, then offsets them by camera_x * layer.speed.
+
+    Why random_set_seed? Without it, rectangle positions would re-randomize
+    every frame. The same seed produces the same positions each frame, but
+    the scroll offset shifts them relative to the camera.
+
+  --------------------------------------------------------------------------------
+  obj_menu
+  --------------------------------------------------------------------------------
+
+  Purpose:
+    The title screen. Handles the main menu list, a controls sub-screen, and
+    an options sub-screen.
+
+  CREATE event:
+    Sets up all menu state:
+
+      menu_items     = ["START", "CONTROLS", "OPTIONS", "QUIT"]
+      menu_index     = 0      which item is currently selected
+      show_controls  = false  are we on the controls sub-screen?
+      show_options   = false
+      input_cooldown = 0      prevents rapid repeat on held keys
+      cursor_blink   = 0      counter driving the blinking > cursor
+
+    Also ensures obj_transition exists and triggers a fade-in so the menu
+    appears gracefully when the room loads.
+
+    Colors defined here:
+      accent_color  hot pink   (selected items, cursor, accent line)
+      text_color    off-white  (selected item text)
+      dim_color     muted grey (unselected items, sub-labels)
+      bg_color      near black (full background fill)
+
+  STEP event:
+    Reads keyboard and gamepad simultaneously. Uses input_cooldown to prevent
+    accidental double-presses when navigating up and down.
+
+    Control flow:
+      1. If obj_transition is currently fading out, skip all input.
+      2. If show_controls is true, only respond to Back or Confirm.
+      3. Otherwise, Up/Down navigate the list, Confirm selects.
+
+    Actions on Confirm:
+      START     -- transition_to(rm_test)
+      CONTROLS  -- show_controls = true
+      OPTIONS   -- show_options = true
+      QUIT      -- game_end()
+
+  DRAW GUI event:
+    Draws everything to screen space (unaffected by game camera).
+
+    Three rendering modes:
+
+      Controls screen -- a two-column table of action names and key bindings
+      Options screen  -- placeholder "Coming soon" text
+      Main menu       -- game title, pink accent line, menu items with
+                         selection highlight and blinking cursor
+
+  --------------------------------------------------------------------------------
+  obj_soul_ui
+  --------------------------------------------------------------------------------
+
+  Purpose:
+    The HUD. Draws health masks and the soul vessel bar. Also owns the screen
+    shake system -- the shake offset is applied to the camera here.
+
+  CREATE event:
+    All visual parameters:
+      ui_x / ui_y           position of the HUD (top-left corner)
+      mask_size = 14        pixel size of each health square
+      mask_gap = 4          gap between health squares
+      vessel_w = 80         width of the soul bar container
+      vessel_h = 10         height of the soul bar
+
+    Shake system:
+      shake_intensity = 0   current shake magnitude in pixels
+      shake_decay = 0.75    multiplied each frame -- shake fades out
+      shake_min = 0.5       below this value, snap shake to zero
+      shake_x = 0           this frame's random horizontal offset
+      shake_y = 0           this frame's random vertical offset
+
+    Soul flash feedback:
+      soul_flash = 0        countdown timer for flash effect
+      soul_flash_max = 12   how many frames the flash lasts
+      soul_flash_color      flash color (white on cast, red on fail)
+
+  STEP event:
+    Handles shake decay each frame:
+      If shake_intensity > shake_min, multiply by shake_decay and generate
+      new random shake_x and shake_y offsets.
+      Otherwise, zero everything out.
+
+  DRAW GUI event (Draw_64):
+    Health masks:
+      Loops from 0 to health_max - 1. Draws a filled red square for each
+      point of current health, and an empty dark square (outline only) for
+      each missing point. A small highlight rectangle sits at the top of
+      each filled mask for depth.
+
+    Soul vessel:
+      A rectangular bar sitting below the health masks. The inner fill
+      scales based on soul_current / soul_max. A subtle shimmer line runs
+      along the top of the fill. When completely full, the border pulses
+      with a purple glow.
+
+    Soul flash:
+      A temporary color overlay on the vessel. White when a spell is cast,
+      red when casting is attempted without enough soul.
+
+  POST-DRAW GUI event (Draw_72):
+    Applies the shake offset to the camera view position:
+      camera_set_view_pos using camera_get_view_x + shake_x, etc.
+
+    This runs after Draw GUI so the shake only moves the game world, not
+    the UI overlay.
+
+  --------------------------------------------------------------------------------
+  obj_particle
+  --------------------------------------------------------------------------------
+
+  Purpose:
+    A single square particle. spawn_particles() and
+    spawn_particles_directional() create many of these and override their
+    variables immediately after creation. Each particle manages its own life.
+
+  CREATE event (default values -- overridden by spawner):
+    hsp / vsp       = 0
+    friction        = 0.85   velocity multiplier per frame (slows particle)
+    size            = 4      pixels wide and tall
+    size_shrink     = 0.3    subtracted from size each frame
+    color           = c_orange
+    alpha           = 1
+    fade_speed      = 0.06   subtracted from alpha each frame
+    lifetime        = 20     frames until forced destroy
+
+  STEP event:
+    Each frame:
+      1. Multiply hsp and vsp by friction (decelerates the particle)
+      2. Move by hsp and vsp
+      3. Subtract size_shrink from size
+      4. Subtract fade_speed from alpha
+      5. Decrement lifetime
+      6. Destroy when lifetime <= 0, OR alpha <= 0, OR size <= 0
+
+    Note: gravity is commented out in the code. Particles float and drift
+    rather than falling. Uncomment "vsp += 0.04" if you want them to fall.
+
+  DRAW event:
+    Draws a filled rectangle centered on x, y with side length "size",
+    in "color" at "alpha".
+
+  --------------------------------------------------------------------------------
+  oKnight
+  --------------------------------------------------------------------------------
+
+  Purpose:
+    The player character. This is the largest and most complex object.
+
+  CREATE event:
+    Variables are organized into regions. Here is every variable and what
+    it controls:
+
+    MOVEMENT
+      hsp / vsp           horizontal and vertical speed in pixels per frame
+      move_speed = 4      max horizontal speed on the ground
+      accel_ground = 4    ground acceleration (set equal to move_speed for
+                          instant stop/start, like Hollow Knight)
+      accel_air = 0.2     air acceleration added per frame (low = heavy,
+                          committed air movement)
+      friction_air = 0.85 multiplied on hsp when no input is held in air
+                          (lower = carries momentum longer)
+      fast_fall_speed = 0.8  extra gravity added when holding down in air
+
+    JUMP
+      jump_force = -11    initial upward velocity on jump (negative = up)
+      gravity_val = 0.5   gravity added to vsp each frame
+      max_fall_speed = 14 terminal velocity (normal)
+      fast_fall_max = 18  terminal velocity during fast fall
+
+    JUMP STATE
+      can_jump            true only while on the ground
+      jump_buffer = 6     frames a buffered jump stays valid
+      was_on_ground       previous frame's ground state (landing detection)
+
+    WALL JUMP
+      on_wall_left/right  current wall contact state
+      wall_slide_speed = 2     max fall speed while sliding on a wall
+      wall_jump_hsp = 5        horizontal force on wall jump
+      wall_jump_vsp = -10      vertical force on wall jump
+      wall_jump_lock_max = 22  frames of reduced steering after wall jump
+
+    COMBAT
+      nail_damage = 1
+      nail_cd_max = 18       frames between swings (~0.3s at 60fps)
+      nail_dur_max = 20      frames nail swing visual shows
+      nail_hitbox_dur = 8    frames hitbox stays active (tighter than visual)
+      nail_bounce_force = -13  upward velocity when nailing down onto enemy
+
+    SOUL
+      soul_max = 99
+      soul_current = 0
+      soul_per_hit = 11    soul gained per nail hit (9 hits fills the bar)
+
+    SPELL
+      soul_cost_vs = 11    soul cost for Vengeful Spirit
+      spell_cd_max = 30    frames between casts (~0.5s)
+      cast_dur_max = 18    frames knight is frozen during the cast
+
+    HEALTH
+      health_max = 5
+      health_current = 5
+      i_frames_max = 60    invincibility frames after being hit (1 second)
+
+    DEATH AND RESPAWN
+      dead = false
+      death_dur = 90       frames before respawn (1.5 seconds)
+      spawn_x / spawn_y    saved at creation, used as respawn position
+      room_current         saved at creation, used with transition_to on death
+
+  STEP event:
+    Processes everything in this exact order each frame:
+
+    1. INPUT READING
+       Checks both keyboard and gamepad. Gamepad takes priority if connected.
+       All movement input (key_left, key_right, key_jump) is forced to false
+       while "casting" is true. This is the Hollow Knight cast freeze -- the
+       knight cannot move while casting a spell.
+
+    2. COLLISION STATE
+       on_ground     = place_meeting(x, y+1, oPhysicalObject)
+       on_wall_left  = place_meeting(x-1, y, oPhysicalObject) && !on_ground
+       on_wall_right = place_meeting(x+1, y, oPhysicalObject) && !on_ground
+       Walls are only counted while airborne. Ground contact overrides wall.
+
+    3. HORIZONTAL MOVEMENT
+       Three modes depending on state:
+
+       wall_jump_lock > 0:
+         Just wall-jumped. Input weakly nudges speed via approach() but the
+         lock decays each frame, gradually returning full control to the
+         player.
+
+       Clinging (touching wall while falling downward):
+         Only input pressing INTO the wall does anything (zeroes hsp to keep
+         the cling). Pressing away does nothing -- jumping handles departure.
+
+       Normal:
+         If moving: on ground = instant (hsp = move_speed * dir). In air =
+         gradual (add accel_air toward target speed each frame).
+         If not moving: on ground = instant stop. In air = bleed via
+         friction_air.
+
+    4. JUMP BUFFER
+       Counts down every frame. Pressing jump resets it to jump_buffer_max.
+       This means: pressing jump up to 6 frames before landing still fires
+       the jump when you land. Distinct from coyote time (which is time
+       after walking off a ledge -- not implemented here).
+
+    5. JUMPING
+       Ground jump: fires if jump_buffer > 0 AND can_jump. Sets vsp to
+         jump_force, spawns downward dust particles.
+
+       Wall jump: fires if jump_buffer > 0 AND on a wall AND not on ground.
+         Sets vsp to wall_jump_vsp, hsp to +/-wall_jump_hsp, spawns
+         directional wall particles, locks steering.
+
+       Variable jump height: if jump is released while still rising
+         (vsp < -2), add 0.6 of upward friction each frame. Short tap = low
+         hop. Hold = full jump height.
+
+    6. GRAVITY AND FAST FALL
+       Base gravity_val = 0.5. Three modifiers:
+         Descending: gravity * 1.4 (falls faster than it rises -- asymmetric
+           arc, feels more grounded)
+         Wall sliding: gravity * 0.4, max fall = wall_slide_speed (slow drift)
+         Fast fall: gravity + fast_fall_speed, max fall = fast_fall_max
+
+    7. NAIL COOLDOWN TIMERS
+       Counts down nail_cooldown and nail_duration each frame. Sets
+       nail_active = false when nail_duration reaches zero.
+
+    8. SPELL COOLDOWN AND CAST TIMER
+       If casting = true, counts down cast_timer. When it hits zero:
+       sets casting = false and spawns oVengefulSpirit.
+
+    9. SPELL INPUT
+       If key_spell pressed AND soul >= soul_cost_vs AND not on cooldown:
+         Deduct soul, set casting = true, start cast timer, spawn purple
+         cast particles, trigger white soul flash on UI.
+       If not enough soul: flash the vessel red.
+
+    10. NAIL INPUT
+        If key_nail pressed AND no cooldown:
+          Determine direction based on held keys and whether airborne.
+            key_up held         = nail up
+            key_down in air     = nail down
+            otherwise           = horizontal (uses facing direction)
+          Destroy any existing nail hitbox belonging to this knight.
+          Calculate hitbox spawn position based on direction and reach.
+          Spawn oNailHitbox with correct sprite, owner, direction, damage.
+
+    11. I-FRAMES
+        Counts down i_frames each frame.
+
+    12. COLLISION RESOLUTION
+        Horizontal collision first, then vertical. Uses pixel-step while
+        loop: move one pixel at a time in the direction of travel until
+        hitting solid, so the knight always slides flush against walls.
+        Captures vsp_prev before vertical resolution for landing detection.
+
+    13. LANDING DUST
+        If the knight just landed (on_ground AND NOT was_on_ground AND
+        vsp_prev > 2), spawn ground impact dust particles.
+
+    14. ENEMY BODY COLLISION
+        Pushes the knight 2 pixels away from any overlapping enemy, checking
+        that the push direction isn't into a wall.
+
+    15. WALK DUST
+        While on ground and moving faster than 0.5 pixels/frame, increment
+        walk_particle_timer. Every walk_particle_rate frames, spawn a small
+        dust particle.
+
+    16. DEATH
+        Two phases:
+          Trigger: health_current <= 0 AND dead = false.
+            Sets dead = true, zeroes velocity, spawns white burst particles,
+            calls screenshake(8), calls transition_to(room_current).
+
+          Countdown: dead = true.
+            Counts down death_timer. At zero: restores health and soul,
+            resets position to spawn_x/spawn_y, sets dead = false, gives
+            i_frames, calls transition_to(room_current) again to fade in.
+
+    17. CAMERA
+        Smooth follow with lerp 0.15, clamped to room bounds.
+
+  DRAW event:
+    1. draw_self() -- draws the sprite
+    2. White rectangle flash overlay when hit_flash > 0
+    3. Blue rectangle nail visual when nail_active (placeholder art)
+    4. Purple pulsing glow around knight when casting
+
+  --------------------------------------------------------------------------------
+  oPhysicalObject
+  --------------------------------------------------------------------------------
+
+  Purpose:
+    Parent object for all solid geometry -- floor tiles, walls, platforms.
+    Has no events. Everything that should block movement should be a child
+    of this object or use it as the collision target.
+
+    All collision checks in the project use:
+      place_meeting(x, y, oPhysicalObject)
+
+    Because of parent-child inheritance, any child object is automatically
+    included in these checks without extra code.
+
+  --------------------------------------------------------------------------------
+  oEnemy  (parent class)
+  --------------------------------------------------------------------------------
+
+  Purpose:
+    Base class shared by all enemies. Provides health, hit flash, and contact
+    damage. Children call event_inherited() in their Create to get these
+    variables, then override as needed.
+
+  CREATE event:
+    enemy_health = 3
+    hsp = 0; vsp = 0
+    hit_flash = 0    countdown for white flash visual on hit
+    i_frames = 0     brief invincibility after hitting the player
+
+  STEP event:
+    1. Apply gravity and vertical collision (same pixel-step pattern as
+       the knight).
+    2. Contact damage: if touching oKnight and knight is not invincible,
+       deal 1 damage, apply knockback to knight, give knight i_frames,
+       spawn red hit particles, screenshake(5).
+
+  DRAW event:
+    Draws the sprite with draw_self(), then overlays a white rectangle
+    when hit_flash > 0.
+
+  USER EVENT 0 -- Take Hit  (Other_10.gml):
+    Called externally by oNailHitbox and oVengefulSpirit via event_user(0).
+
+    1. If enemy_health is already 0 or below, exit early (no double-death).
+    2. Decrement enemy_health, start hit_flash countdown.
+    3. If enemy_health is now 0 or below:
+         Spawn red burst particles, screenshake(4), destroy self.
+
+  --------------------------------------------------------------------------------
+  oCrawler
+  --------------------------------------------------------------------------------
+
+  Purpose:
+    A simple patrol enemy. Walks back and forth, turning at walls and
+    ledges. Inherits from oEnemy.
+
+  CREATE event:
+    event_inherited()        runs oEnemy Create first
+    enemy_health = 2         dies in 2 hits
+    hsp = 1.5                starts moving right
+    wall_check_dist = 1      pixels ahead to check for wall collision
+    ledge_check_dist = 8     pixels ahead at ground level to check for ledge
+
+  STEP event:
+    Overrides oEnemy Step entirely (does not call event_inherited):
+
+    1. Gravity and vertical collision (same as oEnemy Step).
+
+    2. Patrol AI:
+         Get current direction: dir = sign(hsp)
+         Wall check: if place_meeting(x + wall_check_dist * dir, y,
+           oPhysicalObject) is true, flip hsp.
+         Ledge check: if place_meeting(x + ledge_check_dist * dir, y + 1,
+           oPhysicalObject) is false (no floor ahead), flip hsp.
+         Apply: x += hsp
+         Flip sprite: image_xscale = sign(hsp)
+
+    3. Contact damage (same logic as oEnemy -- duplicated, not inherited).
+
+    4. Hit flash countdown.
+
+  --------------------------------------------------------------------------------
+  oLeaper
+  --------------------------------------------------------------------------------
+
+  Purpose:
+    An enemy that stands still, detects the knight within a range, then
+    leaps toward them. Has a cooldown between leaps. Inherits from oEnemy.
+
+  CREATE event:
+    event_inherited()
+    enemy_health  = 3
+    detect_range  = 150   pixel radius within which knight is noticed
+    leap_force_h  = 4     horizontal speed applied on leap
+    leap_force_v  = -9    vertical force on leap (upward)
+    leap_cd_max   = 120   frames between leaps (2 seconds at 60fps)
+    leaping = false
+    on_ground = false
+
+  STEP event:
+    1. Gravity and full collision (horizontal and vertical, since leapers
+       are airborne between leaps).
+    2. Air friction: hsp bleeds toward 0 via lerp while airborne.
+    3. Leap AI:
+         Count down leap_cooldown.
+         If on ground AND not currently leaping AND knight is within
+         detect_range AND cooldown is 0: leap toward knight.
+         On landing after a leap: reset leaping = false, spawn landing
+         dust particles.
+    4. Always face the knight: image_xscale = sign(knight.x - x)
+    5. Contact damage (same as oEnemy -- duplicated).
+    6. Hit flash countdown.
+
+  --------------------------------------------------------------------------------
+  oNailHitbox
+  --------------------------------------------------------------------------------
+
+  Purpose:
+    An invisible hitbox spawned by oKnight every time the nail is swung.
+    Lives for nail_hitbox_dur frames, checks for overlaps with enemies and
+    breakables, then destroys itself.
+
+  CREATE event:
+    owner     = noone   set to oKnight's id by the spawner
+    swing_dir = 0       0 = right, 1 = left, 2 = up, 3 = down
+    lifetime  = 0       frames remaining (set by spawner)
+    damage    = 1
+    hit_list  = []      array of enemy ids already hit this swing
+
+  STEP event:
+    Each frame:
+
+    1. Count down lifetime. Destroy on 0.
+    2. Destroy if owner no longer exists.
+
+    3. For every oEnemy instance, perform manual bounding box overlap check:
+         hx1 < ex2  AND  hx2 > ex1  AND  hy1 < ey2  AND  hy2 > ey1
+
+       Skip if enemy is in hit_list (already hit this swing).
+
+       On overlap:
+         Add enemy to hit_list.
+         Add soul_per_hit to knight's soul_current (capped at soul_max).
+         If soul just became full for the first time this swing:
+           Burst purple particles, flash the soul vessel purple.
+         Apply recoil to knight:
+           Down swing hit  = nail_bounce_force upward (bounce off enemy)
+           Other swings    = slight opposite pushback (right, left, or up)
+         Spawn yellow impact particles, screenshake(3).
+         Call event_user(0) on the enemy (triggers oEnemy Take Hit).
+
+    4. For every oBreakable, same bounding box check:
+         Spawn impact particles, screenshake(2).
+         Call event_user(0) on the breakable (triggers oBreakable Take Hit).
+
+    Note on why manual bbox math instead of place_meeting:
+      The hitbox is positioned at an offset from the knight. place_meeting
+      does not easily give overlap information from inside a "with" block
+      against a different object type. Direct bbox comparison is explicit,
+      readable, and reliable.
+
+  --------------------------------------------------------------------------------
+  oVengefulSpirit
+  --------------------------------------------------------------------------------
+
+  Purpose:
+    The Vengeful Spirit spell. A fireball that travels horizontally,
+    damages enemies and breakables, and destroys itself on wall collision
+    or after a timeout.
+
+  CREATE event:
+    owner    = noone    set by knight on spawn
+    hsp      = 8        set by knight (positive = right, negative = left)
+    facing   = 1
+    lifetime = 180      3 seconds at 60fps
+    damage   = 1
+    hit_list = []       enemies already struck (prevents multi-hit)
+    color    = purple (200, 150, 255)
+    size     = 12
+
+  STEP event:
+    Each frame:
+    1. Count down lifetime. On expiry: spawn poof particles, destroy.
+    2. Check wall collision ahead (place_meeting with offset). On hit:
+       poof particles, destroy.
+    3. Move: x += hsp
+    4. Trail: every 2 frames, spawn a small fading purple particle at x, y.
+    5. Hit check against all oEnemy instances using manual bbox overlap.
+       On hit: particles, screenshake(3), call event_user(0) on enemy,
+       then destroy the spirit.
+    6. Hit check against all oBreakable instances. Same pattern.
+
+  DRAW event:
+    Outer glow:  color at 30% alpha, full size
+    Inner core:  c_navy at 100% alpha, half size
+
+  --------------------------------------------------------------------------------
+  oBreakable
+  --------------------------------------------------------------------------------
+
+  Purpose:
+    A destructible crate. On death it reads a global config table and spawns
+    the matching pickups.
+
+  CREATE event:
+    enemy_health  = 1           one hit to break
+    hit_flash     = 0
+    hit_flash_max = 8
+    breakable_type = "crate_soul"  override this in room Creation Code
+
+  DRAW event:
+    draw_self() then white overlay while hit_flash > 0.
+
+  USER EVENT 0 -- Take Hit:
+    Called by nail and Vengeful Spirit.
+
+    1. Exit if already destroyed (health <= 0).
+    2. Decrement health, start hit_flash.
+    3. If health reaches 0:
+         Spawn brown wood-chip particles.
+         screenshake(3).
+         Look up breakable_type in global.breakable_types.
+         For each entry in the drops array, spawn the appropriate orb
+         (oSoulOrb or oHealthOrb) with random spread velocity.
+         Destroy self.
+
+    Adding new crate types:
+      Edit init_breakable_types() in scr_init.gml. The "type" field in each
+      drop entry must be "soul" or "health" -- those are the only two orbs.
+
+  --------------------------------------------------------------------------------
+  oSoulOrb
+  --------------------------------------------------------------------------------
+
+  Purpose:
+    A pickup that restores soul. Has three phases: settle (falls after spawn),
+    idle bobbing animation, and magnetic attraction when the knight is close.
+
+  CREATE event:
+    sprite_scale  = 0.4        render size multiplier
+    hsp = 0; vsp = 0
+    bob_timer = random(360)    randomized so orbs don't all bob in sync
+    bob_speed = 0.06
+    bob_amount = 4             pixels of vertical bob
+    attract_range = 60         pixels at which the orb starts flying to knight
+    attract_speed = 6          speed while flying to knight
+    soul_value = 33            soul restored on collection
+    settled = false
+    gravity_val = 0.3
+
+  STEP event:
+    Phase 1 -- Unsettled (settled = false):
+      Falls with gravity_val, collision-resolves against floors.
+      hsp bleeds off via lerp.
+      Sets settled = true on landing.
+
+    Phase 2 -- Settled idle (settled = true, out of attract range):
+      Increments bob_timer each frame. The Y offset is calculated only in
+      Draw -- the actual position doesn't change.
+
+    Phase 3 -- Attracted (settled = true, within attract_range):
+      Flies toward knight using point_direction and lengthdir_x/y.
+      Collects (gives soul, spawns particles, destroys self) when
+      distance to knight is less than 12 pixels.
+
+  DRAW event:
+    Calculates _bob_y from sin(bob_timer) and draws the sprite offset
+    upward by that amount at sprite_scale. A commented-out glow circle
+    is available if you want to re-enable it.
+
+  --------------------------------------------------------------------------------
+  oHealthOrb
+  --------------------------------------------------------------------------------
+
+  Purpose:
+    Identical in structure to oSoulOrb but restores 1 health mask instead
+    of soul. Uses spr_health_orb. Flashes the UI red on collection instead
+    of purple.
+
+  Collection:
+    Adds 1 to oKnight.health_current only if health_current < health_max.
+    Does nothing if the player is already at full health.
+
+
+================================================================================
+  6.  PHASE BREAKDOWN -- WHAT WAS BUILT WHEN
+================================================================================
+
+  Based on the git commit history, here is what each phase added:
+
+  PHASE 1 -- Core Movement
+  -------------------------
+  What was built:
+    oKnight Create and Step: horizontal movement, jump, gravity, wall slide
+    oPhysicalObject as the collision parent
+    Manual collision resolution (pixel-step while loop)
+    scr_approach utility function
+    Basic camera follow
+
+  Key decisions:
+    No built-in GMS physics -- custom gravity and movement for full control
+    move_speed = 4 with instant ground acceleration (Hollow Knight feel)
+    accel_air = 0.2 -- heavy, committed air movement
+
+  PHASE 2 -- Combat
+  ------------------
+  What was built:
+    oNailHitbox -- directional hitbox with hit list
+    oEnemy parent -- health, hit flash, contact damage
+    oCrawler -- patrol AI
+    Soul system variables on oKnight
+    Nail direction logic (up / down / horizontal)
+
+  PHASE 3 -- Soul System + Vengeful Spirit
+  -----------------------------------------
+  What was built:
+    Soul gained per nail hit (soul_per_hit = 11)
+    Soul cost for spells (soul_cost_vs = 11)
+    Cast freeze (casting flag, cast_dur_max = 18 frames)
+    oVengefulSpirit -- projectile with trail particles
+    obj_soul_ui -- health masks and soul vessel bar
+    Soul flash feedback (white on cast, red on failure)
+
+  PHASE 4 -- Camera + Screenshake
+  --------------------------------
+  What was built:
+    Camera smooth-follow with lerp 0.15
+    screenshake() function in scr_particles
+    obj_soul_ui Draw_72 applies shake offset to camera after GUI draw
+    Shake decay per frame
+
+  PHASE 5 + 6 -- Particles, Polish, Breakables, Collectibles
+  -----------------------------------------------------------
+  What was built:
+    obj_particle -- single-instance particle system
+    spawn_particles() and spawn_particles_directional() in scr_particles
+    All particle spawn calls throughout the codebase:
+      jump dust, wall jump, landing, walk dust, hit impacts, spell effects,
+      soul full burst
+    oBreakable -- destructible crates
+    scr_init -- init_breakable_types() with configurable drop tables
+    oSoulOrb and oHealthOrb -- pickups with settle/bob/attract behavior
+    oLeaper -- leaping enemy AI
+
+  PHASE 7 -- Menu System + Transitions
+  -------------------------------------
+  What was built:
+    obj_transition -- persistent fade overlay
+    transition_to() helper function
+    obj_menu -- full title screen with Controls and Options sub-screens
+    rm_menu room
+    Death and respawn using transition_to(room_current)
+
+  PHASE 8 (most recent) -- Death/Respawn + Parallax
+  --------------------------------------------------
+  What was built:
+    dead flag and death_timer on oKnight
+    Full death/respawn flow:
+      burst particles > screenshake > fade out > reload room > fade in
+      > restore health and position
+    spawn_x / spawn_y stored at knight creation for respawn point
+    obj_parallax -- procedural scrolling background with depth layers
+
+
+================================================================================
+  7.  TUNING REFERENCE -- EVERY CONFIGURABLE VARIABLE
+================================================================================
+
+  Change one variable at a time and playtest. These are all in Create events
+  unless otherwise noted.
+
+  PLAYER MOVEMENT FEEL
+  ---------------------
+  move_speed            oKnight    4       Max horizontal speed. Higher = faster.
+                                           Hollow Knight used ~3-4 at this scale.
+
+  accel_ground          oKnight    4       Ground accel. Equals move_speed =
+                                           instant stop/start. Reduce for ice feel.
+
+  accel_air             oKnight    0.2     Air accel per frame. Lower = heavier,
+                                           more committed air movement. Try 0.5
+                                           for more responsive air control.
+
+  friction_air          oKnight    0.85    Multiplied on hsp with no input in air.
+                                           Lower = carries momentum longer.
+
+  fast_fall_speed       oKnight    0.8     Extra gravity when holding down in air.
+                                           Higher = snappier fast fall.
+
+  fast_fall_max         oKnight    18      Terminal velocity during fast fall.
+
+  JUMP ARC
+  ---------
+  jump_force            oKnight    -11     Initial upward velocity on jump.
+                                           More negative = higher jump.
+
+  gravity_val           oKnight    0.5     Gravity added per frame. Higher =
+                                           snappier, quicker arc.
+
+  max_fall_speed        oKnight    14      Terminal velocity (normal fall).
+
+  jump_buffer_max       oKnight    6       Frames a buffered jump is valid.
+                                           6 = very forgiving, 0 = disabled.
+
+  0.6 (in Step)         oKnight    0.6     Friction on upward velocity when jump
+                                           is released. Higher = more short-hop
+                                           variance between tap and hold.
+
+  1.4 (in Step)         oKnight    1.4     Descending gravity multiplier. 1.0 =
+                                           symmetric arc. 1.4 = HK-style faster
+                                           fall on descent.
+
+  WALL JUMP
+  ----------
+  wall_slide_speed      oKnight    2       Max fall speed while wall-sliding.
+                                           Lower = slower. 0 = perfect cling.
+
+  wall_jump_hsp         oKnight    5       Horizontal force on wall jump.
+                                           Higher = shoots out further.
+
+  wall_jump_vsp         oKnight    -10     Vertical force on wall jump.
+                                           More negative = higher.
+
+  wall_jump_lock_max    oKnight    22      Frames of reduced steering after
+                                           wall jump. Higher = more committed
+                                           to the arc.
+
+  COMBAT TIMING
+  --------------
+  nail_cd_max           oKnight    18      Frames between nail swings (~0.3s).
+                                           Lower = faster attack rate.
+
+  nail_hitbox_dur       oKnight    8       Frames hitbox stays active.
+                                           Lower = tighter timing window.
+
+  nail_dur_max          oKnight    20      Frames nail visual shows.
+                                           Can be longer than hitbox.
+
+  nail_damage           oKnight    1       Damage per swing.
+
+  nail_bounce_force     oKnight    -13     Upward velocity when nailing down
+                                           onto enemy. More negative = higher
+                                           bounce.
+
+  _reach (in Step)      oKnight    20      Pixels ahead nail hitbox spawns.
+                                           Higher = longer reach.
+
+  _reach_down (Step)    oKnight    32      Downward nail reach. Larger for the
+                                           down-sweep.
+
+  SOUL SYSTEM
+  ------------
+  soul_max              oKnight    99      Max soul. Keep at 99 -- soul_per_hit
+                                           and soul_cost are tuned to this.
+
+  soul_per_hit          oKnight    11      Soul gained per nail hit. 11 = 9 hits
+                                           to fill. Change with soul_cost_vs.
+
+  soul_cost_vs          oKnight    11      Soul cost for Vengeful Spirit. At 11
+                                           cost and 11 per hit, 1 hit = 1 potential
+                                           cast.
+
+  SPELLS
+  -------
+  spell_cd_max          oKnight    30      Frames between casts (~0.5s).
+
+  cast_dur_max          oKnight    18      Frames knight is frozen while casting.
+                                           0 = no freeze.
+
+  hsp (VengefulSpirit)  VSpirit    8       Projectile travel speed. Set by knight.
+
+  lifetime (VSpirit)    VSpirit    180     Frames before auto-expire (~3 seconds).
+
+  HEALTH AND DAMAGE
+  ------------------
+  health_max            oKnight    5       Number of health masks displayed.
+
+  i_frames_max          oKnight    60      Invincibility frames after hit.
+                                           60 = 1 second. Lower = harder game.
+
+  enemy_health          oCrawler   2       Hits to kill the crawler.
+
+  enemy_health          oLeaper    3       Hits to kill the leaper.
+
+  SCREEN SHAKE
+  -------------
+  shake_decay           soul_ui    0.75    Multiplied each frame. 0.75 = ~10
+                                           frames. 0.9 = lingers much longer.
+
+  shake_min             soul_ui    0.5     Shake snaps to zero below this to
+                                           prevent micro-vibration.
+
+  screenshake(3)        NailHitbox  --     Nail hits enemy -- light shake.
+  screenshake(5)        oEnemy      --     Player takes damage -- medium.
+  screenshake(8)        oKnight     --     Player dies -- heavy.
+  screenshake(2)        NailHitbox  --     Breakable hit -- lightest.
+
+  PARTICLES
+  ----------
+  jump_particle_count   oKnight    8       Particles spawned on jump.
+
+  jump_particle_color   oKnight    80,80,80  Dark grey jump dust color.
+
+  walk_particle_rate    oKnight    8       Frames between walk dust spawns.
+                                           Lower = more frequent dust.
+
+  wall_particle_count   oKnight    6       Particles on wall jump.
+
+  friction (particle)   particle   0.85    How fast particles slow down.
+                                           Lower = more slide.
+
+  fade_speed (particle) particle   0.06    How fast particles fade out.
+                                           Higher = shorter lived.
+
+  ENEMY AI
+  ---------
+  hsp (Crawler)         oCrawler   1.5     Patrol speed.
+
+  wall_check_dist       oCrawler   1       How close to wall before turning.
+
+  ledge_check_dist      oCrawler   8       How far ahead to check for ledges.
+
+  detect_range          oLeaper    150     Pixel range to notice the knight.
+
+  leap_force_h          oLeaper    4       Horizontal speed of leap.
+
+  leap_force_v          oLeaper    -9      Vertical force of leap.
+
+  leap_cd_max           oLeaper    120     Frames between leaps (2 seconds).
+
+  COLLECTIBLES
+  -------------
+  soul_value            oSoulOrb   33      Soul restored per orb collected.
+
+  health_value          oHealthOrb 1       Health restored per orb.
+
+  attract_range         both orbs  60      Distance at which orbs fly to knight.
+
+  attract_speed         both orbs  6       Speed while flying to knight.
+
+  bob_amount            both orbs  4       Pixels of vertical bob oscillation.
+
+  sprite_scale          both orbs  0.4     Render scale (0.4 = 40% of sprite).
+
+  TRANSITIONS
+  ------------
+  fade_speed            transition 0.04    Opacity change per frame.
+                                           0.04 = ~25 frames per transition.
+                                           Higher = faster fade.
+
+  PARALLAX LAYERS
+  ----------------
+  Layer 0   speed 0.0    Solid dark background fill (no scroll)
+  Layer 1   speed 0.15   Far layer -- barely moves
+  Layer 2   speed 0.30   Mid layer
+  Layer 3   speed 0.50   Near layer -- moves at half camera speed
+
+  Add more entries to the layers array in obj_parallax Create. Increase
+  "rects" for a busier layer.
+
+
+================================================================================
+  8.  HOW SYSTEMS TALK TO EACH OTHER
+================================================================================
+
+  This maps the data flow -- which objects read or write which other objects.
+
+  obj_init
+    calls init_breakable_types()
+      populates global.breakable_types
+        used by oBreakable User Event 0 to determine what to drop
+
+  obj_transition  (persistent singleton)
+    transition_to(room_id) sets it in motion
+      called by obj_menu on START
+      called by oKnight on death
+      called by oKnight on respawn
+
+  oKnight
+    reads obj_soul_ui.shake_intensity  -->  sets via screenshake()
+    reads obj_soul_ui.soul_flash       -->  sets on cast / failed cast
+    spawns oNailHitbox with owner = oKnight.id
+    spawns oVengefulSpirit with owner = oKnight.id
+    modifies its own: hsp, vsp, soul_current, health_current, i_frames
+
+  oNailHitbox
+    reads oKnight via owner reference
+      modifies: soul_current, vsp / hsp (recoil on hit)
+    calls event_user(0) on oEnemy    -->  triggers oEnemy Take Hit
+    calls event_user(0) on oBreakable  -->  triggers oBreakable Take Hit
+    reads and writes obj_soul_ui.soul_flash
+
+  oVengefulSpirit
+    calls event_user(0) on oEnemy    -->  triggers oEnemy Take Hit
+    calls event_user(0) on oBreakable  -->  triggers oBreakable Take Hit
+
+  oEnemy, oCrawler, oLeaper
+    on contact with oKnight:
+      modify oKnight.health_current, i_frames, hsp, vsp
+
+  oBreakable
+    on death:
+      spawns oSoulOrb or oHealthOrb based on global.breakable_types config
+
+  oSoulOrb
+    on collection:
+      modifies oKnight.soul_current
+
+  oHealthOrb
+    on collection:
+      modifies oKnight.health_current
+      reads and writes obj_soul_ui.soul_flash
+
+  obj_soul_ui
+    reads oKnight.health_current, health_max, soul_current, soul_max
+    applies shake_x / shake_y to camera in Draw_72
+
+  screenshake()  (script function)
+    writes obj_soul_ui.shake_intensity
+
+
+================================================================================
+  9.  ROOMS
+================================================================================
+
+  rm_menu
+  --------
+  The first room the game loads. Contains:
+
+    obj_init       initializes global data (persistent, fires once ever)
+    obj_transition fade overlay (persistent)
+    obj_menu       the title screen
+
+  Room Creation Code:
+    display_set_gui_size(1280, 720);
+
+  rm_test
+  --------
+  The gameplay room. Contains:
+
+    oKnight            the player character
+    obj_parallax       scrolling background
+    obj_soul_ui        HUD (health masks, soul bar, screen shake)
+    Tile geometry      level floors and walls (parented to oPhysicalObject)
+    oCrawler           one or more patrol enemies
+    oLeaper            one or more leaping enemies
+    oBreakable x2      two crates with Creation Code: breakable_type = "crate_mixed"
+
+  Room layers (the string names matter for code references):
+
+    Background    holds obj_parallax
+    Tiles         solid tile geometry using oPhysicalObject for collision
+    Instances     main gameplay objects
+    Particles     particle objects (drawn on top of Instances)
+    UI            HUD objects (obj_soul_ui)
+
+
+================================================================================
+  10. PORTING TO A NEW PROJECT
+================================================================================
+
+  Use this checklist if you want to use Bug Knight as the base for a new game.
+
+  STEP 1 -- Copy the required files
+  -----------------------------------
+  Required scripts:
+    scr_approach      utility math function
+    scr_init          global init + transition_to helper
+    scr_particles     particle spawn functions + screenshake
+
+  Required objects:
+    obj_init          must be placed in your first room
+    obj_transition    must be placed in your first room
+    obj_particle      required for all particle effects to work
+    obj_soul_ui       required for screenshake (even if you hide the HUD)
+    oKnight           the player
+    oPhysicalObject   parent for all solid geometry
+
+  Optional (already built, rebrand as needed):
+    obj_menu          main menu
+    obj_parallax      background
+    oEnemy, oCrawler, oLeaper     enemies
+    oNailHitbox, oVengefulSpirit  combat
+    oBreakable, oSoulOrb, oHealthOrb  pickups
+
+  STEP 2 -- Sprites
+  ------------------
+  These sprite names are referenced directly in code. Either create sprites
+  with these names or do a find-and-replace:
+
+    spr_knight        player sprite (origin should be bottom-center)
+    spr_crawler       crawler enemy
+    spr_leaper        leaper enemy
+    spr_soul_orb      soul pickup
+    spr_health_orb    health pickup
+    spr_nail_h        horizontal nail hitbox (can be a 1x1 white pixel)
+    spr_nail_v        vertical nail hitbox (can be a 1x1 white pixel)
+
+  Sprite origins matter: the knight's Y position is the bottom of the
+  sprite. sprite_height is used to offset nail hitbox placement and spell
+  spawn position.
+
+  STEP 3 -- Font
+  ---------------
+  fnt_dialogue is referenced in obj_menu. Create this font in your project
+  or rename the reference. Any monospaced pixel font works.
+
+  STEP 4 -- Room setup
+  ---------------------
+  Every gameplay room needs:
+    A "Particles" layer       (the string name is used in code)
+    A "Tiles" layer           solid geometry using oPhysicalObject
+    An "Instances" layer      gameplay objects
+    obj_soul_ui               placed in the room
+    oKnight                   placed in the room
+
+  Your first room (rm_menu equivalent) also needs:
+    obj_init                  place once
+    obj_transition            place once
+
+  STEP 5 -- Update transition_to() targets
+  -----------------------------------------
+  In obj_menu Step, find the START case:
+    transition_to(rm_test);
+
+  Change rm_test to your first gameplay room.
+
+  STEP 6 -- Update display_set_gui_size
+  ---------------------------------------
+  This is called in two places:
+    rm_menu Room Creation Code
+    oKnight Create event
+
+  Both set (1280, 720). Change to match your target resolution if different.
+
+  STEP 7 -- Update camera resolution
+  ------------------------------------
+  In oKnight Create:
+    camera_set_view_size(_cam, 480, 270);
+
+  480x270 is 16:9 at a pixel-art friendly scale. Change if your game uses
+  a different internal resolution.
+
+  STEP 8 -- Breakable drop table
+  --------------------------------
+  In scr_init, init_breakable_types() defines what each crate type drops.
+  Add new types here. The "type" string in each drop entry must be "soul"
+  or "health" (those are the only two pickup objects). The breakable_type
+  string set in room Creation Code must exactly match a key in this struct.
+
+  STEP 9 -- Remove placeholder art
+  ----------------------------------
+  Some visuals are drawn with primitive rectangles as placeholders:
+
+    The nail in oKnight Draw is a blue rectangle.
+      Replace with a sprite or animation.
+
+    The Vengeful Spirit in oVengefulSpirit Draw is rectangles.
+      Replace with a sprite.
+
+    The soul orb and health orb glow circles are commented out in Draw.
+      Uncomment or replace with a glow sprite.
+
+  STEP 10 -- Add animations
+  --------------------------
+  No animation state machine exists. All objects use draw_self() with a
+  single static sprite. To add animations:
+
+    1. Add an anim_state variable in Create.
+    2. In Step, set sprite_index based on state:
+         on_ground + hsp != 0   -->  spr_knight_run
+         on_ground + hsp == 0   -->  spr_knight_idle
+         vsp < 0                -->  spr_knight_jump
+         etc.
+    3. Set image_speed per state.
+
+  The knight already does image_xscale = facing each frame, so sprite
+  flipping is handled -- animation integration only needs to change
+  sprite_index.
+
+================================================================================
+================================================================================
