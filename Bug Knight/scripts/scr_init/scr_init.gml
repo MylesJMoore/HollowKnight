@@ -31,3 +31,13 @@ function init_breakable_types() {
         }
     };
 }
+
+function transition_to(room_id) {
+    /// @description Triggers a fade out then room change
+    if !instance_exists(obj_transition) {
+        instance_create_layer(0, 0, "Instances", obj_transition);
+    }
+    obj_transition.target_room  = room_id;
+    obj_transition.fading_out   = true;
+    obj_transition.fading_in    = false;
+}
